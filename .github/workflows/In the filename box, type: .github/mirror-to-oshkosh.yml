@@ -1,0 +1,22 @@
+name: Mirror to Oshkosh Station-Control-Center
+
+on:
+  push:
+    branches:
+      - test
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Push to Oshkosh repo (test branch only)
+        run: |
+          git config --global user.name "github-actions"
+          git config --global user.email "actions@github.com"
+          git remote add oshkosh https://x-access-token:${{ secrets.OSHKOSH_PUSH_TOKEN }}@github.oshkoshglobal.com/Oshkosh-Ignition-MES/Station-Control-Center.git
+          git push oshkosh HEAD:test --force
