@@ -9,8 +9,8 @@ import autoprefixer from 'autoprefixer';
 // (the `react` mounted-folder resource serves its sibling `dist/` folder).
 // Change PROJECT / APP if your reporting project or app-name differ; the CI deploy
 // target folder in .github/workflows/*.yml must stay aligned with these two values.
-const PROJECT = 'ReportingHub';
-const APP = 'station-control-center';
+const PROJECT = 'Station-Control-Interactions';
+const APP = 'ui-station-control-center';
 const PROD_BASE = `/system/webdev/${PROJECT}/dist/${APP}/react/`;
 
 export default defineConfig(({ mode }) => ({

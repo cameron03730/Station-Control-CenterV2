@@ -47,8 +47,8 @@ npm run preview    # serves the production build
 Served as a static `dist/` behind a WebDev **mounted-folder resource**. The Vite production `base`
 **must** match the WebDev route:
 
-- Route:  `/system/webdev/ReportingHub/dist/station-control-center/react/`
-- Mounted folder target:  `…\ReportingHub\com.inductiveautomation.webdev\resources\dist\station-control-center\dist`
+- Route:  `/system/webdev/Station-Control-Interactions/dist/ui-station-control-center/react/`
+- Mounted folder target:  `…\Station-Control-Interactions\com.inductiveautomation.webdev\resources\dist\ui-station-control-center\dist`
 
 Both derive from `PROJECT` + `APP` in [`vite.config.js`](vite.config.js). Change them there and keep
 the workflow `DEPLOY_TARGET` aligned.

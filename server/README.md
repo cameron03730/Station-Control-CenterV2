@@ -28,7 +28,7 @@ providers — **the server logic runs unchanged.** Nothing needs re-homing.
    (scalar, param `StationName`, DB SCADA). All other queries the tool uses already exist.
 3. **WebDev — HTML:** deploy the built `dist/` via the GitHub Actions workflow (push to `test`/`main`)
    or by copying `dist/` to the gateway. It is served by a WebDev **mounted-folder resource** at
-   `/system/webdev/ReportingHub/dist/station-control-center/react/`. See the repo root
+   `/system/webdev/Station-Control-Interactions/dist/ui-station-control-center/react/`. See the repo root
    [`README.md`](../README.md) "Ignition WebDev hosting" section for the route ↔ `base` ↔ folder
    pairing (this is the static-hosting half, handled by the deploy workflow — not this folder).
 4. **WebDev — API:** create a WebDev **Python** resource named `api` on the FE gateway that hosts

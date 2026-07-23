@@ -25,7 +25,7 @@ every value you have to fill in.
 **Who hosts what**
 | Piece | Where it lives | Set up by |
 |---|---|---|
-| Static UI (`dist/`) | Test reporting server → ReportingHub WebDev mounted folder | GitHub Action (auto) — but the *folder resource* is one-time manual |
+| Static UI (`dist/`) | Test reporting server → Station-Control-Interactions WebDev mounted folder | GitHub Action (auto) — but the *folder resource* is one-time manual |
 | `api` doPost + `StationControl.SCC` script | FE gateway that hosts FactoryControl | One-time manual (Designer) |
 | Build + copy | GitHub Actions self-hosted runner **on the reporting server** | Runner must be online |
 
@@ -62,7 +62,7 @@ Do **not** commit `node_modules/` or `dist/` — they're already in `.gitignore`
 - `.github/workflows/deploy-test.yml` and `deploy.yml` → `VITE_SCC_API_BASE`
   (`https://<fe-host>/system/webdev/FactoryControl/api`) and confirm the runner label + `DEPLOY_TARGET`.
 - `vite.config.js` → `PROJECT` / `APP` only if your reporting project or app-name differ from
-  `ReportingHub` / `station-control-center`. If you change these, keep `DEPLOY_TARGET` in the
+  `Station-Control-Interactions` / `ui-station-control-center`. If you change these, keep `DEPLOY_TARGET` in the
   workflows aligned (they must point at the same folder).
 
 ---
@@ -94,16 +94,16 @@ Remote into the **test reporting server**:
    reporting server, that runner likely already exists — you can reuse it (a runner can serve multiple
    repos). If not, install one (GitHub → repo → Settings → Actions → Runners → New self-hosted runner,
    labels `self-hosted, Windows, X64, test-report`).
-2. **WebDev mounted-folder resource (this is "your path"):** in the **ReportingHub** project, create a
-   WebDev **mounted-folder resource** named `react` under `dist/station-control-center/` whose
+2. **WebDev mounted-folder resource (this is "your path"):** in the **Station-Control-Interactions** project, create a
+   WebDev **mounted-folder resource** named `react` under `dist/ui-station-control-center/` whose
    `folder-path` points at its sibling `dist` folder:
    ```
-   D:\Program Files\Inductive Automation\Ignition\data\projects\ReportingHub\com.inductiveautomation.webdev\resources\dist\station-control-center\dist
+   D:\Program Files\Inductive Automation\Ignition\data\projects\Station-Control-Interactions\com.inductiveautomation.webdev\resources\dist\ui-station-control-center\dist
    ```
-   Resulting URL: `/system/webdev/ReportingHub/dist/station-control-center/react/`
+   Resulting URL: `/system/webdev/Station-Control-Interactions/dist/ui-station-control-center/react/`
    (This exactly matches the Vite `base` and the workflow `DEPLOY_TARGET`.) Create the empty `dist`
    folder if it doesn't exist yet — the Action fills it on first deploy.
-3. Save & publish the ReportingHub project.
+3. Save & publish the Station-Control-Interactions project.
 
 > The `react` node is the URL endpoint; the sibling `dist` folder holds the built files. Keep that
 > pairing straight (it's the same pattern as FCC's `ui-ops-fleet-map/react` → `.../dist`).
@@ -144,7 +144,7 @@ pick `test`.
 ---
 
 ## Phase 5 — Validate in the browser
-Open `https://<reporting-server>/system/webdev/ReportingHub/dist/station-control-center/react/` and confirm:
+Open `https://<reporting-server>/system/webdev/Station-Control-Interactions/dist/ui-station-control-center/react/` and confirm:
 - [ ] The app loads (not a blank screen).
 - [ ] Browser dev tools: **no 404s** for `/assets/...` (if there are, the Vite `base` and the WebDev
       route don't match — Phase 1/2B).
@@ -162,7 +162,7 @@ After TEST is validated, and after any FE-gateway changes are also on the PROD F
 git checkout main && git merge test && git push origin main
 ```
 Runs **Deploy to PROD Ignition Server** on the `prod-report` runner with the PROD `VITE_SCC_API_BASE`.
-Set the PROD FE host + confirm the PROD runner + PROD ReportingHub mounted folder first (Phase 2 for PROD).
+Set the PROD FE host + confirm the PROD runner + PROD Station-Control-Interactions mounted folder first (Phase 2 for PROD).
 
 ---
 
@@ -171,7 +171,7 @@ Set the PROD FE host + confirm the PROD runner + PROD ReportingHub mounted folde
 |---|---|---|
 | Blank page / JS+CSS 404 | Vite `base` ≠ WebDev route | Align `PROJECT`/`APP` in `vite.config.js` with the mounted-folder route (2B) |
 | App loads but shows **demo data** | UI can't reach the `api` endpoint | Set `VITE_SCC_API_BASE`; verify the `api` resource exists + is reachable (2A); check CORS if cross-gateway |
-| 404 at the root route / old build shows | Mounted folder points at the wrong dir, or project not published | Point `folder-path` at the built `dist`; save & publish ReportingHub (2B) |
+| 404 at the root route / old build shows | Mounted folder points at the wrong dir, or project not published | Point `folder-path` at the built `dist`; save & publish Station-Control-Interactions (2B) |
 | Action fails at "Validate runner Node.js" | Runner Node ≠ 22.x | Install/repair Node 22 on the runner |
 | Action fails at "Run tests" | `npm test` errored | `npm test` is a pass-through stub here; a failure means a dependency/lockfile issue — check `npm ci` |
 | Deploy succeeds, hosted app unchanged | Pushed to the repo but not the mapped branch, or runner offline | Push to `test`/`main`; confirm the runner is Online |

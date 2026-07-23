@@ -7,9 +7,9 @@ on:
 
 env:
   # Gateway-side folder the built dist is copied into. Must match the Vite `base` in vite.config.js:
-  #   base = /system/webdev/ReportingHub/dist/station-control-center/react/
-  #   target folder = ...\resources\dist\station-control-center\dist
-  DEPLOY_TARGET: 'D:\Program Files\Inductive Automation\Ignition\data\projects\ReportingHub\com.inductiveautomation.webdev\resources\dist\station-control-center\dist'
+  #   base = /system/webdev/Station-Control-Interactions/dist/ui-station-control-center/react/
+  #   target folder = ...\resources\dist\ui-station-control-center\dist
+  DEPLOY_TARGET: 'D:\Program Files\Inductive Automation\Ignition\data\projects\Station-Control-Interactions\com.inductiveautomation.webdev\resources\dist\ui-station-control-center\dist'
   # Where the SCC dynamic-dispatch doPost is reachable from the browser. Point this at the FE gateway
   # that hosts the `api` WebDev resource (FactoryControl project). Delete it to fall back to same-origin.
   VITE_SCC_API_BASE: 'https://REPLACE-TEST-FE-HOST/system/webdev/FactoryControl/api'
