@@ -188,7 +188,7 @@ function TabStation() {
         </div>
         <div className="max-h-[calc(100vh-240px)] min-h-[420px] overflow-auto">
           {loading ? <EmptyState icon="progress_activity" title="Loading stations…" /> :
-          {filtered.length === 0 ? <EmptyState icon="search_off" title="No stations match" sub="Adjust the area filter or search." /> : (
+          filtered.length === 0 ? <EmptyState icon="search_off" title="No stations match" sub="Adjust the area filter or search." /> : (
             <table className="w-full text-[13px] border-collapse">
               <thead className="sticky top-0 z-10">
                 <tr className="text-left">
