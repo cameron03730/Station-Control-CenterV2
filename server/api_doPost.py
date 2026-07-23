@@ -1,20 +1,29 @@
 # =============================================================================
-# SCC WebDev API — dynamic dispatcher
+# SCC WebDev API — dynamic dispatcher (with CORS)
 # =============================================================================
-# Paste this into the doPost tab of a WebDev *Python* resource named "api" on the FRONT-END
-# gateway (FE1/FE2), as a SIBLING of the mounted HTML folder (NOT inside it). On the resource's
-# Security tab enable "Require Authentication" and restrict to roles Engineering / Supervisor /
-# Scheduler, so only a logged-in, authorized Ignition user can reach it.
+# Paste EACH function below into the matching tab of a WebDev *Python* resource named "api"
+# on the FE gateway that hosts FactoryControl (e.g. james-jef-tst):
+#     doPost tab     -> doPost()   + the helpers/classes above it
+#     doOptions tab  -> doOptions()   (REQUIRED for cross-origin — answers the browser preflight)
+#     doGet tab      -> doGet()       (optional; replaces the "hello world" placeholder)
+# The `StationControl.SCC` script must also be in the gateway's script library, or the
+# dispatcher will error (that's the module this file dispatches to).
 #
-# Contract (matches app/station-control-hub/scc-api.jsx):
+# Contract (matches src/api.js):
 #   Request  (JSON body):  { "action": "<StationControl.SCC function>", "args": { ...kwargs... } }
 #   Response (JSON):       reads   -> { "ok": true, "data": <any> }
 #                          commits -> { "ok": true, "message": "...", ... }  (function's own dict)
 #                          errors  -> HTTP 4xx/5xx + { "ok": false, "message": "..." }
 #
-# The dispatcher runs *whatever function the request names* — but ONLY on the StationControl.SCC
-# module, and never a _private name. That module boundary + the resource's auth are the whole
-# safety story; this is deliberately NOT eval / arbitrary gateway code.
+# WHY CORS: the UI is served from a different gateway/host than this API, so the browser sends a
+# preflight OPTIONS before the POST. Without CORS headers + a doOptions handler the preflight fails
+# and the app sees "Failed to fetch". _applyCors echoes the caller's Origin (so it works WITH
+# credentials, auth on or off) and doOptions answers the preflight.
+#
+# NOTE ON AUTH: with "Require Authentication" ON, the browser's *preflight* OPTIONS (sent with no
+# cookie) can be rejected by Ignition before it reaches doOptions. For this POC auth is OFF, so
+# OPTIONS reaches doOptions and this works. When you re-enable auth, allow anonymous OPTIONS on
+# this resource (or the preflight will 401 and the app will again "Failed to fetch").
 # =============================================================================
 
 SCC = StationControl.SCC   # the one SCC script (project library); referenced directly, no import needed
@@ -28,6 +37,38 @@ COMMIT_KEYS = set([
 ])
 
 logger = system.util.getLogger('SCC WEBDEV API')
+
+
+# ---- CORS: echo the caller's Origin so a credentialed cross-origin fetch is allowed ----
+def _applyCors(request):
+    try:
+        servletResp = request.get('servletResponse')
+        if servletResp is None:
+            return
+        origin = None
+        servletReq = request.get('servletRequest')
+        if servletReq is not None:
+            origin = servletReq.getHeader('Origin')
+        servletResp.setHeader('Access-Control-Allow-Origin', origin if origin else '*')
+        servletResp.setHeader('Access-Control-Allow-Credentials', 'true')
+        servletResp.setHeader('Access-Control-Allow-Methods', 'POST, GET, OPTIONS')
+        servletResp.setHeader('Access-Control-Allow-Headers', 'Content-Type')
+        servletResp.setHeader('Access-Control-Max-Age', '600')
+        servletResp.setHeader('Vary', 'Origin')
+    except Exception:
+        pass
+
+
+# Preflight: the browser sends OPTIONS before the JSON POST. Answer it with the CORS headers.
+def doOptions(request, session):
+    _applyCors(request)
+    return {'json': {}}
+
+
+# Optional: a GET returns a small status blob instead of a placeholder, and carries CORS headers.
+def doGet(request, session):
+    _applyCors(request)
+    return {'json': {'ok': True, 'service': 'SCC api', 'hint': 'POST {\"action\": <fn>, \"args\": {...}}'}}
 
 
 # ---- audit identity: resolve the authenticated user, then wrap it so the SCC ----
@@ -44,7 +85,7 @@ class _SessionShim(object):
 
 def _resolveAuditUser(request, session):
     # With "Require Authentication" on, the servlet exposes the logged-in user. Try the reliable
-    # sources in order; never trust a username from the request body.
+    # sources in order; never trust a username from the request body. (Auth is OFF in POC -> 'scc-web'.)
     try:
         servlet = request.get('servletRequest')
         if servlet is not None:
@@ -61,10 +102,11 @@ def _resolveAuditUser(request, session):
             return str(session.get('user'))
     except Exception:
         pass
-    return 'scc-web'   # fallback only; if you see this in the audit log, auth is not configured
+    return 'scc-web'   # fallback only; expected while auth is off
 
 
 def doPost(request, session):
+    _applyCors(request)
     try:
         body = request.get('data') or {}
         action = body.get('action', '')
@@ -87,14 +129,11 @@ def doPost(request, session):
         data = fn(**args) if args else fn()
         return {'json': {'ok': True, 'data': data}}
 
-    except Exception, e:   # Jython 2.x syntax; also catches nothing Java-side (see note)
+    except Exception, e:   # Jython 2.x syntax
         logger.error('doPost failed for action=%s: %s' % (str(locals().get('action', '?')), str(e)))
         return {'status': 500, 'json': {'ok': False, 'message': str(e)}}
 
 
 # NOTE: a remote backend failure arrives as a java.lang.Exception, which the bare `except Exception`
 # above will NOT catch. The SCC functions already catch (java.lang.Exception, Exception) internally
-# and return a friendly {'ok': False, 'message': ...}, so it normally never propagates here. If you
-# want belt-and-suspenders, wrap the dispatch in:
-#     import java.lang.Exception as JavaError
-#     try: ... except (JavaError, Exception), e: ...
+# and return a friendly {'ok': False, 'message': ...}, so it normally never propagates here.
