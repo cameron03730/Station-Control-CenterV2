@@ -83,6 +83,23 @@ class _SessionShim(object):
     def __init__(self, name): self.props = _Props(name)
 
 
+def _readBody(request):
+    # WebDev puts the POSTed body in request['postData'] — a parsed dict when Content-Type is
+    # application/json (per the WebDev docs). request['data'] is the RAW text/bytes, not parsed.
+    # Read postData first; fall back to data and json-decode it so this works across Ignition versions.
+    body = request.get('postData')
+    if body is None:
+        body = request.get('data')
+    if isinstance(body, basestring):
+        try:
+            body = system.util.jsonDecode(body)
+        except Exception:
+            body = {}
+    if not isinstance(body, dict):
+        body = {}
+    return body
+
+
 def _resolveAuditUser(request, session):
     # With "Require Authentication" on, the servlet exposes the logged-in user. Try the reliable
     # sources in order; never trust a username from the request body. (Auth is OFF in POC -> 'scc-web'.)
@@ -108,7 +125,7 @@ def _resolveAuditUser(request, session):
 def doPost(request, session):
     _applyCors(request)
     try:
-        body = request.get('data') or {}
+        body = _readBody(request)
         action = body.get('action', '')
         args = body.get('args', {}) or {}
 
