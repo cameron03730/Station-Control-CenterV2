@@ -1,0 +1,25 @@
+name: Mirror to Oshkosh Station-Control-Center
+
+# Manual only — this does NOT run automatically on push. Trigger it yourself from
+# GitHub → Actions → "Mirror to Oshkosh Station-Control-Center" → Run workflow,
+# whenever you want the Oshkosh repo's test branch to be replaced with this repo's
+# current test branch.
+on:
+  workflow_dispatch:
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout test branch (full history)
+        uses: actions/checkout@v4
+        with:
+          ref: test
+          fetch-depth: 0
+
+      - name: Push test branch to Oshkosh repo
+        run: |
+          git config --global user.name "github-actions"
+          git config --global user.email "actions@github.com"
+          git remote add oshkosh https://x-access-token:${{ secrets.OSHKOSH_PUSH_TOKEN }}@github.oshkoshglobal.com/Oshkosh-Ignition-MES/Station-Control-Center.git
+          git push oshkosh HEAD:test --force
