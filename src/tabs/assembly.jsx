@@ -1,5 +1,9 @@
+import React, { useState, useEffect } from 'react';
+import { Icon, Pill, StatusPill, Btn, Card, CardHead, TextInput, SearchBox, Dropdown, Toggle, Segmented, ReasonField, MonoVal, ConfirmDialog, EmptyState } from '../primitives.jsx';
+import { AREA_ORDER, areaOf, STATUS, nowStamp, validateSerial, classifyLookup, RECON_DB } from '../data.js';
+import { SCC } from '../api.js';
+
 // ===== TAB 3: Manual Assembly — Planned → Build Queue → Scheduled pipeline =====
-const { useState } = React;
 
 let woCounter = 104590;
 
@@ -47,18 +51,25 @@ function BuilderRow({ row, onRemove }) {
 }
 
 function TabAssembly() {
-  const [planned, setPlanned] = useState(seedPlanned);
+  const [planned, setPlanned] = useState([]);
   const [plannedQ, setPlannedQ] = useState('');
   const [input, setInput] = useState('');
-  const [rows, setRows] = useState([
-    { serial: '0160155501', status: 'PENDING', reason: '' },
-    { serial: 'M12345', status: 'PENDING', reason: '' },
-    { serial: '0160153042', status: 'PENDING', reason: '' }
-  ]);
+  const [rows, setRows] = useState([]);
   const [reason, setReason] = useState('');
   const [legacy, setLegacy] = useState(false);
-  const [scheduled, setScheduled] = useState(seedScheduled);
+  const [scheduled, setScheduled] = useState([]);
   const [schedQ, setSchedQ] = useState('');
+  const [loading, setLoading] = useState(true);
+
+  const load = async () => {
+    setLoading(true);
+    try {
+      const [pl, sc] = await Promise.all([SCC.assembly.planned(), SCC.assembly.scheduled()]);
+      setPlanned(pl); setScheduled(sc);
+    } catch (e) { window.sccToast('Could not load assembly data: ' + e.message, 'error'); }
+    finally { setLoading(false); }
+  };
+  useEffect(() => { load(); }, []);
 
   const nVerified = rows.filter(r => r.status === 'VERIFIED').length;
   const counts = ['PENDING', 'VERIFIED', 'INVALID'].map(s => ({ s, n: rows.filter(r => r.status === s).length }));
@@ -70,34 +81,63 @@ function TabAssembly() {
     setRows(r => [...r, { serial: s, status: 'PENDING', reason: '' }]);
   };
 
-  const verifyAll = () => {
-    const already = scheduled.map(s => s.serial);
-    setRows(rs => {
-      const seen = [...already];
-      return rs.map(r => {
-        let res = validateSerial(r.serial, seen);
-        if (res.status === 'VERIFIED' && !planned.some(p => p.serial === r.serial.trim())) {
-          res = { status: 'INVALID', reason: 'not in planned machines' };
-        }
-        if (res.status === 'VERIFIED') seen.push(r.serial.trim());
-        return { ...r, ...res };
+  const verifyAll = async () => {
+    if (SCC.mode === 'DEMO') {
+      const already = scheduled.map(s => s.serial);
+      setRows(rs => {
+        const seen = [...already];
+        return rs.map(r => {
+          let res = validateSerial(r.serial, seen);
+          if (res.status === 'VERIFIED' && !planned.some(p => p.serial === r.serial.trim())) {
+            res = { status: 'INVALID', reason: 'not in planned machines' };
+          }
+          if (res.status === 'VERIFIED') seen.push(r.serial.trim());
+          return { ...r, ...res };
+        });
       });
-    });
-    window.sccToast('Verification complete.', 'info');
+      window.sccToast('Verification complete.', 'info');
+      return;
+    }
+    const serials = rows.map(r => r.serial.trim()).filter(Boolean);
+    if (!serials.length) return;
+    try {
+      const res = await SCC.assembly.verify(serials);
+      const bySerial = {};
+      (res.results || []).forEach(x => { bySerial[String(x.serial).trim()] = x; });
+      setRows(rs => rs.map(r => {
+        const x = bySerial[r.serial.trim()];
+        if (!x) return { ...r, status: 'INVALID', reason: 'not verified' };
+        return { ...r, status: x.ok ? 'VERIFIED' : 'INVALID', reason: x.ok ? '' : (x.reason || 'invalid') };
+      }));
+      window.sccToast(res.message || 'Verification complete.', 'info');
+    } catch (e) { window.sccToast(e.message || 'Verify failed.', 'error'); }
   };
 
-  const scheduleAll = () => {
+  const scheduleAll = async () => {
     const valid = rows.filter(r => r.status === 'VERIFIED');
     const skipped = rows.length - valid.length;
     if (valid.length === 0) { window.sccToast('No verified serials to schedule. Run Verify All first.', 'warn'); return; }
-    const additions = valid.map(r => {
-      const p = planned.find(x => x.serial === r.serial.trim());
-      return { serial: r.serial.trim(), product: p?.product || '—', machine: p?.machine || '—', status: 1, wo: `WG-${woCounter++}`, ts: nowStamp(0), legacy };
-    });
-    setScheduled(s => [...additions, ...s]);
-    setPlanned(pl => pl.filter(p => !valid.some(v => v.serial.trim() === p.serial)));
-    setRows(rs => rs.filter(r => r.status !== 'VERIFIED'));
-    window.sccToast(<span>Scheduled <b>{valid.length}</b> of {rows.length}{skipped ? <>; skipped <b>{skipped}</b></> : ''}{legacy ? ' (Legacy)' : ''}. Removed from planned machines.</span>, 'success');
+    const serials = valid.map(r => r.serial.trim());
+
+    if (SCC.mode === 'DEMO') {
+      const additions = valid.map(r => {
+        const p = planned.find(x => x.serial === r.serial.trim());
+        return { serial: r.serial.trim(), product: p?.product || '—', machine: p?.machine || '—', status: 1, wo: `WG-${woCounter++}`, ts: nowStamp(0), legacy };
+      });
+      setScheduled(s => [...additions, ...s]);
+      setPlanned(pl => pl.filter(p => !valid.some(v => v.serial.trim() === p.serial)));
+      setRows(rs => rs.filter(r => r.status !== 'VERIFIED'));
+      window.sccToast(<span>Scheduled <b>{valid.length}</b> of {rows.length}{skipped ? <>; skipped <b>{skipped}</b></> : ''}{legacy ? ' (Legacy)' : ''}. Removed from planned machines.</span>, 'success');
+      return;
+    }
+    try {
+      const res = await SCC.assembly.schedule(serials, legacy, reason);
+      if (res && res.ok === false) { window.sccToast(res.message || 'Scheduling rejected.', 'error'); return; }
+      const okSet = new Set((res.scheduled || serials).map(s => String(s).trim()));
+      setRows(rs => rs.filter(r => !okSet.has(r.serial.trim())));
+      window.sccToast(res.message || `Scheduled ${okSet.size} machine(s).`, 'success');
+      await load();
+    } catch (e) { window.sccToast(e.message || 'Scheduling failed.', 'error'); }
   };
 
   const filteredSched = scheduled.filter(s => s.serial.includes(schedQ) || s.wo.toLowerCase().includes(schedQ.toLowerCase()) || s.product.toLowerCase().includes(schedQ.toLowerCase()));
@@ -191,7 +231,7 @@ function TabAssembly() {
           </div>
           <div className="flex items-center gap-2.5">
             <SearchBox value={schedQ} onChange={setSchedQ} placeholder="Search…" className="w-56" />
-            <Btn variant="secondary" icon="refresh" onClick={() => { setScheduled(seedScheduled()); setPlanned(seedPlanned()); window.sccToast('Scheduled serials and planned machines refreshed.', 'info'); }}>Refresh</Btn>
+            <Btn variant="secondary" icon="refresh" onClick={async () => { await load(); window.sccToast('Scheduled serials and planned machines refreshed.', 'info'); }}>Refresh</Btn>
           </div>
         </div>
         <div className="overflow-auto">
@@ -222,4 +262,4 @@ function TabAssembly() {
   );
 }
 
-window.TabAssembly = TabAssembly;
+export default TabAssembly;

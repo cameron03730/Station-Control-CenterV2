@@ -1,5 +1,9 @@
+import React, { useState, useEffect } from 'react';
+import { Icon, Pill, StatusPill, Btn, Card, CardHead, TextInput, SearchBox, Dropdown, Toggle, Segmented, ReasonField, MonoVal, ConfirmDialog, EmptyState } from '../primitives.jsx';
+import { AREA_ORDER, areaOf, STATUS, nowStamp, validateSerial, classifyLookup, RECON_DB } from '../data.js';
+import { SCC } from '../api.js';
+
 // ===== TAB 1: Station Rectification — full-width list + run-schedule drawer =====
-const { useState, useEffect } = React;
 
 function StationRow({ row, selected, onClick }) {
   const next = row.runSchedule.find(e => e.status !== 3);
@@ -83,7 +87,8 @@ function CompEditor({ label, current, blocked, reason, onCommit, onBlank }) {
 }
 
 function TabStation() {
-  const [stations, setStations] = useState(seedStations);
+  const [stations, setStations] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [area, setArea] = useState('All Areas');
   const [q, setQ] = useState('');
   const [selId, setSelId] = useState(null);
@@ -106,8 +111,24 @@ function TabStation() {
     return () => window.removeEventListener('keydown', h);
   }, []);
 
-  const refresh = () => { setStations(seedStations()); window.sccToast('Station list refreshed from Ignition.', 'info'); };
-  const openStation = (id) => { setSelId(id); setReason(''); setOpenEntry(null); };
+  const load = async () => {
+    setLoading(true);
+    try { setStations(await SCC.stations.list()); }
+    catch (e) { window.sccToast('Could not load stations: ' + e.message, 'error'); }
+    finally { setLoading(false); }
+  };
+  useEffect(() => { load(); }, []);
+
+  const refresh = async () => { await load(); window.sccToast('Station list refreshed from Ignition.', 'info'); };
+  const openStation = async (id) => {
+    setSelId(id); setReason(''); setOpenEntry(null);
+    if (SCC.mode === 'LIVE') {
+      try {
+        const rs = await SCC.stations.next(id);
+        setStations(list => list.map(s => s.station === id ? { ...s, runSchedule: rs || [] } : s));
+      } catch (e) { /* next-up is advisory; ignore */ }
+    }
+  };
 
   const commit = (field, label, newVal, clearInput, danger) => {
     const cur = sel[field] || '(blank)';
@@ -117,19 +138,29 @@ function TabStation() {
       title: danger ? `Clear ${label}?` : `Commit ${label}?`,
       confirmLabel: danger ? 'Set Blank' : 'Commit',
       body: <span>Set <b className="text-scc-text">{sel.station}</b> {label} from <span className="font-mono">{cur}</span> → <span className={`font-mono font-semibold ${danger ? 'text-scc-red' : 'text-scc-orangeDk'}`}>{nxt}</span>. This override will be recorded to the SupervisorOverrideLog.</span>,
-      run: () => {
-        setStations(list => list.map(s => s.station === selId ? { ...s, [field]: newVal } : s));
-        window.sccToast(<span><b>{sel.station}</b> {label}: <span className="font-mono">{cur}</span> → <span className="font-mono">{nxt}</span></span>, 'success');
-        clearInput?.(); setConfirm(null);
+      run: async () => {
+        const slot = field === 'c2' ? 'c2' : 'c1';
+        try {
+          const r = await SCC.stations.setComp(sel.station, slot, newVal, reason);
+          if (r && r.ok === false) { window.sccToast(r.message || 'Commit rejected.', 'error'); setConfirm(null); return; }
+          setStations(list => list.map(s => s.station === selId ? { ...s, [field]: newVal } : s));
+          window.sccToast((r && r.message) ? r.message : <span><b>{sel.station}</b> {label}: <span className="font-mono">{cur}</span> → <span className="font-mono">{nxt}</span></span>, 'success');
+          clearInput?.();
+        } catch (e) { window.sccToast(e.message || 'Commit failed.', 'error'); }
+        finally { setConfirm(null); }
       }
     });
   };
 
-  const actEntry = (tag, kind) => {
+  const actEntry = async (tag, kind) => {
     const e = sel.runSchedule.find(x => x.tag === tag);
-    setStations(list => list.map(s => s.station === selId
-      ? { ...s, runSchedule: s.runSchedule.map(x => x.tag === tag ? { ...x, status: kind === 'complete' ? 3 : 2 } : x) } : s));
-    window.sccToast(<span><span className="font-mono">{e.comp} | {e.serial}</span> {kind === 'complete' ? 'marked COMPLETE' : 'marked WIP'} at <b className="font-mono">{sel.station}</b>.</span>, kind === 'complete' ? 'success' : 'info');
+    try {
+      const r = await SCC.stations.markEntry(sel.station, e.comp, kind, reason);
+      if (r && r.ok === false) { window.sccToast(r.message || 'Action rejected.', 'error'); return; }
+      setStations(list => list.map(s => s.station === selId
+        ? { ...s, runSchedule: s.runSchedule.map(x => x.tag === tag ? { ...x, status: kind === 'complete' ? 3 : 2 } : x) } : s));
+      window.sccToast((r && r.message) ? r.message : <span><span className="font-mono">{e.comp} | {e.serial}</span> {kind === 'complete' ? 'marked COMPLETE' : 'marked WIP'} at <b className="font-mono">{sel.station}</b>.</span>, kind === 'complete' ? 'success' : 'info');
+    } catch (err) { window.sccToast(err.message || 'Action failed.', 'error'); }
   };
 
   return (
@@ -239,7 +270,16 @@ function TabStation() {
                 </div>
                 <div className="p-4 border-t border-scc-borderLt">
                   <Btn variant="outlineOrange" icon="sync" disabled={!reason.trim()} className="w-full"
-                    onClick={() => window.sccToast(<span>Next work order refreshed for <b>{sel.station}</b>.</span>, 'info')}>
+                    onClick={async () => {
+                      try {
+                        const r = await SCC.stations.refreshNext(sel.station, reason);
+                        window.sccToast((r && r.message) ? r.message : <span>Next work order refreshed for <b>{sel.station}</b>.</span>, (r && r.ok === false) ? 'error' : 'info');
+                        if (!(r && r.ok === false) && SCC.mode === 'LIVE') {
+                          const rs = await SCC.stations.next(sel.station);
+                          setStations(list => list.map(s => s.station === selId ? { ...s, runSchedule: rs || [] } : s));
+                        }
+                      } catch (e) { window.sccToast(e.message || 'Refresh failed.', 'error'); }
+                    }}>
                     Refresh Next Work Order
                   </Btn>
                   {!reason.trim() && <div className="text-[11px] text-scc-muted mt-2 flex items-center gap-1"><Icon name="info" style={{ fontSize: 14 }} />Enter a reason to enable run-schedule actions.</div>}
@@ -257,4 +297,4 @@ function TabStation() {
   );
 }
 
-window.TabStation = TabStation;
+export default TabStation;

@@ -1,48 +1,23 @@
 import { defineConfig } from 'vite';
-import { copyFileSync, mkdirSync } from 'node:fs';
-import { resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import react from '@vitejs/plugin-react';
+import tailwindcss from 'tailwindcss';
+import autoprefixer from 'autoprefixer';
 
-const projectRoot = fileURLToPath(new URL('.', import.meta.url));
-const appRoot = resolve(projectRoot, 'app/station-control-hub');
-const runtimeScripts = [
-  'scc-data.jsx',
-  'scc-primitives.jsx',
-  'scc-tab-station.jsx',
-  'scc-tab-amr.jsx',
-  'scc-tab-assembly.jsx',
-  'scc-tab-recon.jsx',
-  'scc-help.jsx',
-  'scc-app.jsx',
-];
+// ── Ignition WebDev hosting ───────────────────────────────────────────────
+// The production `base` MUST exactly match the WebDev route the built app is served from:
+//     /system/webdev/<ProjectName>/dist/<app-name>/react/
+// (the `react` mounted-folder resource serves its sibling `dist/` folder).
+// Change PROJECT / APP if your reporting project or app-name differ; the CI deploy
+// target folder in .github/workflows/*.yml must stay aligned with these two values.
+const PROJECT = 'ReportingHub';
+const APP = 'station-control-center';
+const PROD_BASE = `/system/webdev/${PROJECT}/dist/${APP}/react/`;
 
-export default defineConfig({
-  root: appRoot,
-  base: './',
-  server: {
-    host: 'localhost',
-    port: 5173,
-    strictPort: true,
-  },
-  preview: {
-    host: 'localhost',
-    port: 4173,
-    strictPort: true,
-  },
-  build: {
-    outDir: resolve(projectRoot, 'dist'),
-    emptyOutDir: true,
-  },
-  plugins: [
-    {
-      name: 'copy-babel-runtime-scripts',
-      closeBundle() {
-        const outputDir = resolve(projectRoot, 'dist');
-        mkdirSync(outputDir, { recursive: true });
-        for (const script of runtimeScripts) {
-          copyFileSync(resolve(appRoot, script), resolve(outputDir, script));
-        }
-      },
-    },
-  ],
-});
+export default defineConfig(({ mode }) => ({
+  plugins: [react()],
+  base: mode === 'production' ? PROD_BASE : '/',
+  css: { postcss: { plugins: [tailwindcss(), autoprefixer()] } },
+  server: { host: 'localhost', port: 5173, strictPort: true },
+  preview: { host: 'localhost', port: 4173, strictPort: true },
+  build: { outDir: 'dist', emptyOutDir: true },
+}));

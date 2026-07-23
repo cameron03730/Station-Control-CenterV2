@@ -1,5 +1,9 @@
+import React, { useState, useEffect } from 'react';
+import { Icon, Pill, StatusPill, Btn, Card, CardHead, TextInput, SearchBox, Dropdown, Toggle, Segmented, ReasonField, MonoVal, ConfirmDialog, EmptyState } from '../primitives.jsx';
+import { AREA_ORDER, areaOf, STATUS, nowStamp, validateSerial, classifyLookup, RECON_DB } from '../data.js';
+import { SCC } from '../api.js';
+
 // ===== TAB 4: Work Order Reconciliation =====
-const { useState, useEffect } = React;
 
 function StationActions({ station, kind, reason, onAct, compact }) {
   const disabled = !reason.trim();
@@ -47,12 +51,12 @@ function MiniStamp({ label, value }) {
 }
 
 function TabRecon() {
-  const [query, setQuery] = useState('0160153042');
-  const [submitted, setSubmitted] = useState('0160153042');
+  const [query, setQuery] = useState(SCC.mode === 'DEMO' ? '0160153042' : '');
+  const [submitted, setSubmitted] = useState('');
   const [view, setView] = useState('chart');
-  const [data, setData] = useState(RECON_DB['0160153042']);
+  const [data, setData] = useState(null);
   const [notFound, setNotFound] = useState(false);
-  const [rows, setRows] = useState(RECON_DB['0160153042'].rows);
+  const [rows, setRows] = useState([]);
   const [selStation, setSelStation] = useState(null);
   const [reason, setReason] = useState('');
   const [popover, setPopover] = useState(null); // {station,x,y}
@@ -63,29 +67,42 @@ function TabRecon() {
     return () => window.removeEventListener('keydown', h);
   }, []);
 
-  const search = () => {
-    const q = query.trim();
-    setSubmitted(q);
-    const cls = classifyLookup(q);
-    const found = RECON_DB[q];
-    setSelStation(null); setReason(''); setPopover(null);
-    if (!cls || !found) { setNotFound(true); setData(null); setRows([]); window.sccToast(<span>No schedule found for <b className="font-mono">{q || '—'}</b>.</span>, 'error'); return; }
-    setNotFound(false); setData(found); setRows(found.rows);
-    window.sccToast(<span>Loaded schedule for <b className="font-mono">{q}</b> · {found.rows.length} stations.</span>, 'info');
+  const runSearch = async (raw) => {
+    const q = (raw != null ? raw : query).trim();
+    setSubmitted(q); setSelStation(null); setReason(''); setPopover(null);
+    if (!q) { setNotFound(false); setData(null); setRows([]); return; }
+    if (!classifyLookup(q)) { setNotFound(true); setData(null); setRows([]); window.sccToast(<span>Enter an M-number or a 10-digit serial.</span>, 'error'); return; }
+    try {
+      const res = await SCC.recon.lookup(q);
+      if (!res || !res.found) { setNotFound(true); setData(null); setRows([]); window.sccToast(<span>No schedule found for <b className="font-mono">{q}</b>.</span>, 'error'); return; }
+      setNotFound(false); setData(res); setRows(res.rows || []);
+      window.sccToast(<span>Loaded schedule for <b className="font-mono">{q}</b> · {(res.rows || []).length} stations.</span>, 'info');
+    } catch (e) { setNotFound(true); setData(null); setRows([]); window.sccToast(e.message || 'Lookup failed.', 'error'); }
   };
+  const search = () => runSearch();
+  useEffect(() => { if (SCC.mode === 'DEMO') runSearch('0160153042'); }, []);
 
-  const act = (station, kind) => {
+  const act = async (station, kind) => {
+    const row = rows.find(r => r.station === station);
+    const item = row ? row.item : '';
     const map = {
       complete: { code: 3, msg: 'marked COMPLETE' },
       wip: { code: 2, msg: 'marked WIP' },
       prepaint: { code: 1, msg: 'scheduled for Pre-Paint' },
       preassembly: { code: 1, msg: 'scheduled for Pre-Assembly' }
     }[kind];
-    setRows(rs => rs.map(r => r.station === station ? { ...r, status: map.code,
-      done: kind === 'complete' ? nowStamp(0) : r.done,
-      wip: kind === 'wip' ? nowStamp(0) : r.wip } : r));
-    window.sccToast(<span><b className="font-mono">{submitted}</b> at <b className="font-mono">{station}</b> {map.msg}.</span>, kind === 'complete' ? 'success' : 'info');
-    setPopover(null);
+    try {
+      const r = await SCC.recon.act(submitted, station, item, kind, reason);
+      if (r && r.ok === false) { window.sccToast(r.message || 'Action rejected.', 'error'); return; }
+      window.sccToast((r && r.message) ? r.message : <span><b className="font-mono">{submitted}</b> at <b className="font-mono">{station}</b> {map.msg}.</span>, kind === 'complete' ? 'success' : 'info');
+      setPopover(null);
+      if (SCC.mode === 'LIVE') { await runSearch(submitted); }
+      else {
+        setRows(rs => rs.map(r => r.station === station ? { ...r, status: map.code,
+          done: kind === 'complete' ? nowStamp(0) : r.done,
+          wip: kind === 'wip' ? nowStamp(0) : r.wip } : r));
+      }
+    } catch (e) { window.sccToast(e.message || 'Action failed.', 'error'); }
   };
 
   const lanes = AREA_ORDER.map(area => ({ area, nodes: rows.filter(r => areaOf(r.station) === area) })).filter(l => l.nodes.length > 0);
@@ -261,4 +278,4 @@ function TabRecon() {
   );
 }
 
-window.TabRecon = TabRecon;
+export default TabRecon;

@@ -1,5 +1,7 @@
 // ===== HELP drawer =====
-const { useState, useEffect } = React;
+import React, { useState, useEffect } from 'react';
+import { Icon } from './primitives.jsx';
+
 const HELP_SECTIONS = [
   {
     key: 'station', icon: 'edit_location_alt', title: 'Station Rectification',
@@ -27,7 +29,7 @@ const HELP_SECTIONS = [
   }
 ];
 
-function HelpDrawer({ open, onClose }) {
+export default function HelpDrawer({ open, onClose }) {
   const [expanded, setExpanded] = useState({});
   useEffect(() => {
     const h = e => { if (e.key === 'Escape') onClose(); };
@@ -98,5 +100,3 @@ function HelpDrawer({ open, onClose }) {
     </div>
   );
 }
-
-window.HelpDrawer = HelpDrawer;

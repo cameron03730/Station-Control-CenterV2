@@ -1,16 +1,17 @@
 // ===== Shared UI primitives =====
-const { useState, useEffect, useRef, useCallback } = React;
+import React, { useState, useEffect } from 'react';
+import { STATUS } from './data.js';
 
-function Icon({ name, className = '', style }) {
+export function Icon({ name, className = '', style }) {
   return <span className={`ms ${className}`} style={style}>{name}</span>;
 }
 
 // ---- Pills ----
-function StatusPill({ code, className = '' }) {
+export function StatusPill({ code, className = '' }) {
   const s = STATUS[code] || { label: '—', color: '#5B6675' };
   return <Pill color={s.color} className={className}>{s.label}</Pill>;
 }
-function Pill({ children, color = '#5B6675', solid = false, className = '' }) {
+export function Pill({ children, color = '#5B6675', solid = false, className = '' }) {
   const style = solid
     ? { background: color, color: '#fff', borderColor: color }
     : { background: color + '1A', color, borderColor: color + '40' };
@@ -30,7 +31,7 @@ const BTN_VARIANTS = {
   outlineOrange: 'bg-scc-card text-scc-orangeDk border-scc-orange hover:bg-scc-orange/10',
   ghost: 'bg-transparent text-scc-muted border-transparent hover:bg-scc-borderLt'
 };
-function Btn({ variant = 'secondary', icon, children, className = '', disabled, ...rest }) {
+export function Btn({ variant = 'secondary', icon, children, className = '', disabled, ...rest }) {
   return (
     <button
       disabled={disabled}
@@ -44,10 +45,10 @@ function Btn({ variant = 'secondary', icon, children, className = '', disabled, 
 }
 
 // ---- Card ----
-function Card({ children, className = '', style }) {
+export function Card({ children, className = '', style }) {
   return <div className={`bg-scc-card border border-scc-border rounded-xl shadow-card ${className}`} style={style}>{children}</div>;
 }
-function CardHead({ title, sub, right }) {
+export function CardHead({ title, sub, right }) {
   return (
     <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-scc-borderLt">
       <div>
@@ -60,7 +61,7 @@ function CardHead({ title, sub, right }) {
 }
 
 // ---- Inputs ----
-function TextInput({ value, onChange, placeholder, mono, className = '', onKeyDown, ...rest }) {
+export function TextInput({ value, onChange, placeholder, mono, className = '', onKeyDown, ...rest }) {
   return (
     <input
       value={value} onChange={e => onChange?.(e.target.value)} placeholder={placeholder} onKeyDown={onKeyDown}
@@ -69,7 +70,7 @@ function TextInput({ value, onChange, placeholder, mono, className = '', onKeyDo
     />
   );
 }
-function SearchBox({ value, onChange, placeholder = 'Search…', className = '' }) {
+export function SearchBox({ value, onChange, placeholder = 'Search…', className = '' }) {
   return (
     <div className={`relative ${className}`}>
       <Icon name="search" className="absolute left-2.5 top-1/2 -translate-y-1/2 text-scc-muted" style={{ fontSize: 18 }} />
@@ -78,7 +79,7 @@ function SearchBox({ value, onChange, placeholder = 'Search…', className = '' 
     </div>
   );
 }
-function Dropdown({ value, onChange, options, className = '' }) {
+export function Dropdown({ value, onChange, options, className = '' }) {
   return (
     <div className={`relative ${className}`}>
       <select value={value} onChange={e => onChange(e.target.value)}
@@ -89,7 +90,7 @@ function Dropdown({ value, onChange, options, className = '' }) {
     </div>
   );
 }
-function Toggle({ checked, onChange, label }) {
+export function Toggle({ checked, onChange, label }) {
   return (
     <label className="inline-flex items-center gap-2 cursor-pointer select-none">
       <span onClick={() => onChange(!checked)} className={`relative w-9 h-5 rounded-full transition-colors ${checked ? 'bg-scc-orange' : 'bg-scc-border'}`}>
@@ -99,7 +100,7 @@ function Toggle({ checked, onChange, label }) {
     </label>
   );
 }
-function Segmented({ value, onChange, options }) {
+export function Segmented({ value, onChange, options }) {
   return (
     <div className="inline-flex p-0.5 bg-scc-borderLt rounded-lg border border-scc-border">
       {options.map(o => (
@@ -113,7 +114,7 @@ function Segmented({ value, onChange, options }) {
 }
 
 // ---- Reason field (required) ----
-function ReasonField({ value, onChange, className = '' }) {
+export function ReasonField({ value, onChange, className = '' }) {
   return (
     <div className={className}>
       <div className="flex items-center gap-1.5 mb-1">
@@ -128,13 +129,13 @@ function ReasonField({ value, onChange, className = '' }) {
 }
 
 // ---- Mono value display ----
-function MonoVal({ children, muted }) {
+export function MonoVal({ children, muted }) {
   if (!children) return <span className="font-mono text-[12.5px] text-scc-muted/70 italic">(blank)</span>;
   return <span className={`font-mono text-[12.5px] ${muted ? 'text-scc-muted' : 'text-scc-text'}`}>{children}</span>;
 }
 
 // ---- Confirmation dialog ----
-function ConfirmDialog({ open, title, body, confirmLabel = 'Commit', confirmVariant = 'primary', onConfirm, onCancel }) {
+export function ConfirmDialog({ open, title, body, confirmLabel = 'Commit', confirmVariant = 'primary', onConfirm, onCancel }) {
   useEffect(() => {
     const h = e => { if (e.key === 'Escape') onCancel?.(); };
     if (open) window.addEventListener('keydown', h);
@@ -159,7 +160,7 @@ function ConfirmDialog({ open, title, body, confirmLabel = 'Commit', confirmVari
 }
 
 // ---- Toast system ----
-function ToastHost() {
+export function ToastHost() {
   const [toasts, setToasts] = useState([]);
   useEffect(() => {
     window.sccToast = (msg, type = 'success') => {
@@ -190,7 +191,7 @@ function ToastHost() {
 }
 
 // ---- Empty state ----
-function EmptyState({ icon, title, sub }) {
+export function EmptyState({ icon, title, sub }) {
   return (
     <div className="flex flex-col items-center justify-center text-center py-16 px-6">
       <Icon name={icon} className="text-scc-border" style={{ fontSize: 44 }} />
@@ -199,8 +200,3 @@ function EmptyState({ icon, title, sub }) {
     </div>
   );
 }
-
-Object.assign(window, {
-  Icon, Pill, StatusPill, Btn, Card, CardHead, TextInput, SearchBox, Dropdown,
-  Toggle, Segmented, ReasonField, MonoVal, ConfirmDialog, ToastHost, EmptyState
-});

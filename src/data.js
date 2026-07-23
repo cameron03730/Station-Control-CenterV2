@@ -1,12 +1,12 @@
-// ===== Station Control Center — mock data & helpers =====
-const AREA_BY_PREFIX = {
+// ===== Station Control Center — mock data & shared helpers (DEMO fallback + constants) =====
+export const AREA_BY_PREFIX = {
   TW: 'Frame Fab', TT: 'Boom Fab', PT: 'Paint', TF: 'Main Line',
   TB: 'Boom Sub', TC: 'Cab Sub', TE: 'Engine Sub', TX: 'Outrigger Sub', LL: 'Legacy'
 };
-const AREA_ORDER = ['Frame Fab','Boom Fab','Paint','Pre-Assembly','Main Line','Legacy','Boom Sub','Cab Sub','Engine Sub','Outrigger Sub'];
+export const AREA_ORDER = ['Frame Fab', 'Boom Fab', 'Paint', 'Pre-Assembly', 'Main Line', 'Legacy', 'Boom Sub', 'Cab Sub', 'Engine Sub', 'Outrigger Sub'];
 
 // Status code legend: 0 Scrapped,1 Scheduled,2 WIP,3 Complete,4 Abort,5 Non-Conformance,7 Associated
-const STATUS = {
+export const STATUS = {
   0: { label: 'SCRAPPED', color: '#5B6675' },
   1: { label: 'SCHEDULED', color: '#E8920C' },
   2: { label: 'WIP', color: '#E87722' },
@@ -16,24 +16,12 @@ const STATUS = {
   7: { label: 'ASSOCIATED', color: '#0C8599' }
 };
 
-const areaOf = (station) => AREA_BY_PREFIX[station.slice(0,2)] || 'Main Line';
+export const areaOf = (station) => AREA_BY_PREFIX[station.slice(0, 2)] || 'Main Line';
 
-function nowStamp(offsetMin = 0) {
+export function nowStamp(offsetMin = 0) {
   const d = new Date(Date.now() - offsetMin * 60000);
   return d.toLocaleString('en-US', { month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false });
 }
-
-const seedStations = () => ([
-  { station: 'TW0700', c1: 'M282832', c2: '', status: 2 },
-  { station: 'TT170A', c1: '0160153099', c2: 'M95047', status: 2 },
-  { station: 'PT0100', c1: '', c2: '', status: 1 },
-  { station: 'TF0010', c1: '0160153042', c2: '', status: 2 },
-  { station: 'TF0300', c1: '', c2: '', status: 1 },
-  { station: 'TB0100', c1: 'M12345', c2: '', status: 3 },
-  { station: 'TC0200', c1: '', c2: '', status: 1 },
-  { station: 'TE0100', c1: '0160136118', c2: '', status: 2 },
-  { station: 'LL0010', c1: '', c2: '', status: 1 }
-].map((s, i) => ({ ...s, area: areaOf(s.station), runSchedule: makeRunSchedule(i, s.status === 2) })));
 
 // Station run-schedule mock generator
 const RS_LIB = [
@@ -60,7 +48,19 @@ function makeRunSchedule(seed, wip) {
   });
 }
 
-const seedAmrs = () => ([
+export const seedStations = () => ([
+  { station: 'TW0700', c1: 'M282832', c2: '', status: 2 },
+  { station: 'TT170A', c1: '0160153099', c2: 'M95047', status: 2 },
+  { station: 'PT0100', c1: '', c2: '', status: 1 },
+  { station: 'TF0010', c1: '0160153042', c2: '', status: 2 },
+  { station: 'TF0300', c1: '', c2: '', status: 1 },
+  { station: 'TB0100', c1: 'M12345', c2: '', status: 3 },
+  { station: 'TC0200', c1: '', c2: '', status: 1 },
+  { station: 'TE0100', c1: '0160136118', c2: '', status: 2 },
+  { station: 'LL0010', c1: '', c2: '', status: 1 }
+].map((s, i) => ({ ...s, area: areaOf(s.station), runSchedule: makeRunSchedule(i, s.status === 2) })));
+
+export const seedAmrs = () => ([
   { amr: '001', c1: '0160153042', c2: '', state: 'Auto', batt: 54 },
   { amr: '002', c1: '0160153099', c2: '0160136118', state: 'Auto', batt: 99 },
   { amr: '003', c1: '', c2: '', state: 'StandBy', batt: 47 },
@@ -73,14 +73,14 @@ const seedAmrs = () => ([
   { amr: '010', c1: '', c2: '', state: 'StandBy', batt: 58 }
 ]);
 
-const seedScheduled = () => ([
+export const seedScheduled = () => ([
   { serial: '0160153042', product: 'ES1932', machine: 'Scissor Lift', status: 2, wo: 'WG-104582', ts: nowStamp(42) },
   { serial: '0160153099', product: '600AJ', machine: 'Boom Lift', status: 1, wo: 'WG-104588', ts: nowStamp(15) },
   { serial: '0160136118', product: '1930ES', machine: 'Scissor Lift', status: 3, wo: 'WG-104501', ts: nowStamp(310) },
   { serial: '0160140773', product: '450AJ', machine: 'Boom Lift', status: 7, wo: 'WG-104477', ts: nowStamp(520) }
 ]);
 
-const seedPlanned = () => ([
+export const seedPlanned = () => ([
   { serial: '0160155501', product: 'ES1932', machine: 'Scissor Lift', date: 'Jul 23' },
   { serial: '0160155502', product: '600AJ', machine: 'Boom Lift', date: 'Jul 23' },
   { serial: '0160155510', product: '1930ES', machine: 'Scissor Lift', date: 'Jul 24' },
@@ -90,7 +90,7 @@ const seedPlanned = () => ([
 ]);
 
 // Reconciliation: schedule entries per machine keyed by lookup value
-const RECON_DB = {
+export const RECON_DB = {
   '0160153042': {
     kind: 'WG', product: 'ES1932', machine: 'Scissor Lift', wo: 'WG-104582',
     rows: [
@@ -158,8 +158,8 @@ const RECON_DB = {
   }
 };
 
-// Validation for Manual Assembly serials
-function validateSerial(serial, existing) {
+// Validation for Manual Assembly serials (DEMO)
+export function validateSerial(serial, existing) {
   const s = serial.trim();
   if (/^M/i.test(s)) return { status: 'INVALID', reason: "M-numbers can't be scheduled" };
   if (!/^\d{10}$/.test(s)) return { status: 'INVALID', reason: 'must be a 10-digit serial' };
@@ -167,15 +167,9 @@ function validateSerial(serial, existing) {
   return { status: 'VERIFIED', reason: '' };
 }
 
-function classifyLookup(q) {
+export function classifyLookup(q) {
   const s = q.trim();
   if (/^M\d+/i.test(s)) return 'NWG';
   if (/^\d{10}$/.test(s)) return 'WG';
   return null;
 }
-
-Object.assign(window, {
-  AREA_BY_PREFIX, AREA_ORDER, STATUS, areaOf, nowStamp,
-  seedStations, seedAmrs, seedScheduled, seedPlanned, RECON_DB,
-  validateSerial, classifyLookup
-});

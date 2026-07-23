@@ -1,0 +1,85 @@
+name: Deploy to PROD Ignition Server
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  # Gateway-side folder the built dist is copied into. Must match the Vite `base` in vite.config.js:
+  #   base = /system/webdev/ReportingHub/dist/station-control-center/react/
+  #   target folder = ...\resources\dist\station-control-center\dist
+  DEPLOY_TARGET: 'D:\Program Files\Inductive Automation\Ignition\data\projects\ReportingHub\com.inductiveautomation.webdev\resources\dist\station-control-center\dist'
+  # Point this at the PROD FE gateway that hosts the `api` WebDev resource (FactoryControl project).
+  # Delete it to fall back to same-origin.
+  VITE_SCC_API_BASE: 'https://REPLACE-PROD-FE-HOST/system/webdev/FactoryControl/api'
+
+jobs:
+  build-and-deploy:
+    name: Build & Deploy
+    runs-on: [self-hosted, Windows, X64, prod-report]
+
+    env:
+      NODE_TLS_REJECT_UNAUTHORIZED: '0'
+
+    steps:
+      - name: Disable SSL verification
+        shell: powershell
+        run: |
+          git config --global http.sslVerify false
+          [System.Environment]::SetEnvironmentVariable('NODE_TLS_REJECT_UNAUTHORIZED', '0', 'Process')
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Validate runner Node.js
+        shell: powershell
+        run: |
+          $nodeVersion = (node -v)
+          Write-Host "Runner Node version: $nodeVersion"
+          if (-not $nodeVersion.StartsWith('v22.')) {
+            Write-Error "Node.js 22.x is required on the self-hosted runner. Found: $nodeVersion"
+            exit 1
+          }
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm test
+
+      - name: Build for production
+        env:
+          VITE_SCC_API_BASE: ${{ env.VITE_SCC_API_BASE }}
+        run: npm run build
+
+      - name: Remove old dist folder
+        shell: powershell
+        run: |
+          $target = "${{ env.DEPLOY_TARGET }}"
+          if (Test-Path $target) {
+            Write-Host "Removing: $target"
+            Remove-Item -Path $target -Recurse -Force
+          } else {
+            Write-Host "No existing folder at: $target"
+          }
+
+      - name: Deploy new build
+        shell: powershell
+        run: |
+          $source = "${{ github.workspace }}\dist"
+          $target = "${{ env.DEPLOY_TARGET }}"
+          Copy-Item -Path $source -Destination $target -Recurse -Force
+          Write-Host "Deployed $source -> $target"
+
+      - name: Verify deployment
+        shell: powershell
+        run: |
+          $target = "${{ env.DEPLOY_TARGET }}"
+          if (Test-Path $target) {
+            $fileCount = (Get-ChildItem -Path $target -Recurse -File).Count
+            Write-Host "Deployment verified! $fileCount files deployed to $target"
+          } else {
+            Write-Error "Deployment failed - folder not found at $target"
+            exit 1
+          }

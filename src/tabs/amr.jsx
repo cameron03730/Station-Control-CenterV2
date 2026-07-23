@@ -1,13 +1,20 @@
+import React, { useState, useEffect } from 'react';
+import { Icon, Pill, StatusPill, Btn, Card, CardHead, TextInput, SearchBox, Dropdown, Toggle, Segmented, ReasonField, MonoVal, ConfirmDialog, EmptyState } from '../primitives.jsx';
+import { AREA_ORDER, areaOf, STATUS, nowStamp, validateSerial, classifyLookup, RECON_DB } from '../data.js';
+import { SCC } from '../api.js';
+
 // ===== TAB 2: AMR Rectification =====
-const { useState, useEffect } = React;
 
 const AMR_STATES = {
   Auto: { color: '#2F9E44', label: 'Auto' },
   StandBy: { color: '#E8920C', label: 'StandBy' },
-  Offline: { color: '#5B6675', label: 'Offline' }
+  Offline: { color: '#5B6675', label: 'Offline' },
+  Unknown: { color: '#5B6675', label: 'Unknown' }
 };
+const stateOf = (s) => AMR_STATES[s] || AMR_STATES.Unknown;
 
 function BattBar({ pct }) {
+  if (pct == null) return <div className="text-[11px] text-scc-muted italic">battery n/a</div>;
   const color = pct > 50 ? '#2F9E44' : pct > 20 ? '#E8920C' : '#E03131';
   return (
     <div className="flex items-center gap-2">
@@ -29,7 +36,7 @@ function SlotChip({ label, value }) {
 }
 
 function AmrCard({ row, selected, onSelect, onSend }) {
-  const st = AMR_STATES[row.state];
+  const st = stateOf(row.state);
   const canSend = !!(row.c1 || row.c2) && row.state !== 'Offline';
   return (
     <div onClick={onSelect}
@@ -76,7 +83,8 @@ function AmrCompEditor({ label, current, reason, onCommit, onUnassign }) {
 }
 
 function TabAmr() {
-  const [amrs, setAmrs] = useState(seedAmrs);
+  const [amrs, setAmrs] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [q, setQ] = useState('');
   const [selId, setSelId] = useState(null);
   const [reason, setReason] = useState('');
@@ -85,7 +93,15 @@ function TabAmr() {
   const filtered = amrs.filter(a => a.amr.includes(q) || a.c1.includes(q) || a.c2.includes(q));
   const sel = amrs.find(a => a.amr === selId);
   const counts = ['Auto', 'StandBy', 'Offline'].map(s => ({ s, n: amrs.filter(a => a.state === s).length }));
-  const refresh = () => { setAmrs(seedAmrs()); window.sccToast('AMR fleet refreshed.', 'info'); };
+
+  const load = async () => {
+    setLoading(true);
+    try { setAmrs(await SCC.amrs.list()); }
+    catch (e) { window.sccToast('Could not load AMR fleet: ' + e.message, 'error'); }
+    finally { setLoading(false); }
+  };
+  useEffect(() => { load(); }, []);
+  const refresh = async () => { await load(); window.sccToast('AMR fleet refreshed.', 'info'); };
 
   useEffect(() => {
     const h = e => { if (e.key === 'Escape') setSelId(null); };
@@ -93,7 +109,12 @@ function TabAmr() {
     return () => window.removeEventListener('keydown', h);
   }, []);
 
-  const sendPayload = (a) => window.sccToast(<span>AMR <b className="font-mono">{a.amr}</b> payload sent (Navithor size profile + scanner).</span>, 'success');
+  const sendPayload = async (a) => {
+    try {
+      const r = await SCC.amrs.sendPayload(a.amr, 'Manual payload resend (SCC)');
+      window.sccToast((r && r.message) ? r.message : <span>AMR <b className="font-mono">{a.amr}</b> payload sent (Navithor size profile + scanner).</span>, (r && r.ok === false) ? 'error' : 'success');
+    } catch (e) { window.sccToast(e.message || 'Payload send failed.', 'error'); }
+  };
 
   const askCommit = (field, label, newVal, clearInput) => {
     const cur = sel[field] || '(blank)';
@@ -101,10 +122,16 @@ function TabAmr() {
     setConfirm({
       title: `Commit AMR ${sel.amr} ${label}?`,
       body: <span>Set AMR <b className="text-scc-text font-mono">{sel.amr}</b> {label} → <span className="font-mono text-scc-orangeDk font-semibold">{nxt}</span>. Committing re-sends the AMR payload (Navithor size profile + scanner).</span>,
-      run: () => {
-        setAmrs(list => list.map(a => a.amr === selId ? { ...a, [field]: newVal } : a));
-        window.sccToast(<span>AMR <b className="font-mono">{sel.amr}</b> {label}: <span className="font-mono">{cur}</span> → <span className="font-mono">{nxt}</span> · payload re-sent</span>, 'success');
-        clearInput?.(); setConfirm(null);
+      run: async () => {
+        const slot = field === 'c2' ? 'c2' : 'c1';
+        try {
+          const r = await SCC.amrs.setComp(sel.amr, slot, newVal, reason);
+          if (r && r.ok === false) { window.sccToast(r.message || 'Commit rejected.', 'error'); setConfirm(null); return; }
+          setAmrs(list => list.map(a => a.amr === selId ? { ...a, [field]: newVal } : a));
+          window.sccToast((r && r.message) ? r.message : <span>AMR <b className="font-mono">{sel.amr}</b> {label}: <span className="font-mono">{cur}</span> → <span className="font-mono">{nxt}</span> · payload re-sent</span>, 'success');
+          clearInput?.();
+        } catch (e) { window.sccToast(e.message || 'Commit failed.', 'error'); }
+        finally { setConfirm(null); }
       }
     });
   };
@@ -148,8 +175,8 @@ function TabAmr() {
                   <span className="text-[11px] uppercase tracking-wide text-scc-muted font-bold">AMR</span>
                   <span className="font-mono text-[20px] font-bold text-scc-text leading-none">{sel.amr}</span>
                 </div>
-                <span className="inline-flex items-center gap-1.5 text-[11.5px] font-semibold" style={{ color: AMR_STATES[sel.state].color }}>
-                  <span className="w-2 h-2 rounded-full" style={{ background: AMR_STATES[sel.state].color }} />{AMR_STATES[sel.state].label}
+                <span className="inline-flex items-center gap-1.5 text-[11.5px] font-semibold" style={{ color: stateOf(sel.state).color }}>
+                  <span className="w-2 h-2 rounded-full" style={{ background: stateOf(sel.state).color }} />{stateOf(sel.state).label}
                 </span>
               </div>
               <button onClick={() => setSelId(null)} className="text-scc-muted hover:text-scc-text"><Icon name="close" style={{ fontSize: 22 }} /></button>
@@ -182,4 +209,4 @@ function TabAmr() {
   );
 }
 
-window.TabAmr = TabAmr;
+export default TabAmr;

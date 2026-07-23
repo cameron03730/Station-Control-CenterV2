@@ -1,14 +1,25 @@
 {
   "name": "station-control-center-v2",
   "private": true,
-  "version": "1.0.0",
+  "version": "2.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "node -e \"console.log('SCC: no automated tests yet'); process.exit(0)\""
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
   },
   "devDependencies": {
+    "@fontsource/inter": "^5.1.0",
+    "@vitejs/plugin-react": "^4.3.4",
+    "autoprefixer": "^10.4.20",
+    "material-symbols": "^0.28.1",
+    "postcss": "^8.4.49",
+    "tailwindcss": "^3.4.16",
     "vite": "^7.0.0"
   }
 }
