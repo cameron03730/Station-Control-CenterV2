@@ -12,7 +12,7 @@ env:
   DEPLOY_TARGET: 'D:\Program Files\Inductive Automation\Ignition\data\projects\Station-Control-Interactions\com.inductiveautomation.webdev\resources\dist\ui-station-control-center\dist'
   # Where the SCC dynamic-dispatch doPost is reachable from the browser. Point this at the FE gateway
   # that hosts the `api` WebDev resource (FactoryControl project). Delete it to fall back to same-origin.
-  VITE_SCC_API_BASE: 'https://REPLACE-TEST-FE-HOST/system/webdev/FactoryControl/api'
+  VITE_SCC_API_BASE: 'https://james-jef-tst.oshkoshglobal.com/system/webdev/FactoryControl/api'
 
 jobs:
   build-and-deploy:
