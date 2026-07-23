@@ -50,9 +50,9 @@ function TabRecon() {
   const [query, setQuery] = useState('0160153042');
   const [submitted, setSubmitted] = useState('0160153042');
   const [view, setView] = useState('chart');
-  const [data, setData] = useState(RECON_DB['0160153042']);
+  const [data, setData] = useState(null);
   const [notFound, setNotFound] = useState(false);
-  const [rows, setRows] = useState(RECON_DB['0160153042'].rows);
+  const [rows, setRows] = useState([]);
   const [selStation, setSelStation] = useState(null);
   const [reason, setReason] = useState('');
   const [popover, setPopover] = useState(null); // {station,x,y}
@@ -63,29 +63,51 @@ function TabRecon() {
     return () => window.removeEventListener('keydown', h);
   }, []);
 
-  const search = () => {
+  const search = async () => {
     const q = query.trim();
     setSubmitted(q);
-    const cls = classifyLookup(q);
-    const found = RECON_DB[q];
     setSelStation(null); setReason(''); setPopover(null);
-    if (!cls || !found) { setNotFound(true); setData(null); setRows([]); window.sccToast(<span>No schedule found for <b className="font-mono">{q || '—'}</b>.</span>, 'error'); return; }
-    setNotFound(false); setData(found); setRows(found.rows);
-    window.sccToast(<span>Loaded schedule for <b className="font-mono">{q}</b> · {found.rows.length} stations.</span>, 'info');
+    if (!q) return;
+    try {
+      const found = await sccApi.read('lookupComponent', { idText: q });
+      if (!found || found.found === false) throw new Error(`No schedule found for ${q}.`);
+      const schedule = await sccApi.read('getScheduleEntries', { idText: q });
+      const flow = await sccApi.read('getMachineFlow', { idText: q });
+      const sourceRows = flow?.length ? flow : schedule;
+      const normalizedRows = (sourceRows || []).map(row => ({
+        ...row,
+        station: row.station || row.Station,
+        status: row.status ?? row.Status,
+        item: row.item || row.Item || '',
+        sched: row.sched || row.ScheduledTimestamp || '',
+        wip: row.wip || row.WIPTimestamp || '',
+        done: row.done || row.CompletedTimestamp || '',
+        area: row.area || row.Area || areaOf(row.station || row.Station || '')
+      }));
+      setNotFound(false);
+      setData({ ...found, kind: found.isNWG ? 'NWG' : 'WG', product: found.itemName || found.itemNumber || '', machine: '', wo: found.serial || '', components: found.associations || [] });
+      setRows(normalizedRows);
+      window.sccToast(<span>Loaded schedule for <b className="font-mono">{q}</b> · {normalizedRows.length} stations.</span>, 'info');
+    } catch (error) {
+      setNotFound(true); setData(null); setRows([]); showApiError(error);
+    }
   };
 
-  const act = (station, kind) => {
-    const map = {
-      complete: { code: 3, msg: 'marked COMPLETE' },
-      wip: { code: 2, msg: 'marked WIP' },
-      prepaint: { code: 1, msg: 'scheduled for Pre-Paint' },
-      preassembly: { code: 1, msg: 'scheduled for Pre-Assembly' }
-    }[kind];
-    setRows(rs => rs.map(r => r.station === station ? { ...r, status: map.code,
-      done: kind === 'complete' ? nowStamp(0) : r.done,
-      wip: kind === 'wip' ? nowStamp(0) : r.wip } : r));
-    window.sccToast(<span><b className="font-mono">{submitted}</b> at <b className="font-mono">{station}</b> {map.msg}.</span>, kind === 'complete' ? 'success' : 'info');
-    setPopover(null);
+  const act = async (station, kind) => {
+    const actions = {
+      complete: ['markScheduleComplete', { idText: submitted, station }],
+      wip: ['markScheduleWip', { idText: submitted, station }],
+      prepaint: ['scheduleNwgPrePaint', { componentID: submitted }],
+      preassembly: ['scheduleNwgPreAssembly', { componentID: submitted }]
+    };
+    try {
+      const [action, args] = actions[kind];
+      const result = await sccApi.commit(action, { ...args, reason });
+      if (result?.ok === false) throw new Error(result.message);
+      await search();
+      setPopover(null);
+      window.sccToast(result?.message || 'Schedule updated.', kind === 'complete' ? 'success' : 'info');
+    } catch (error) { showApiError(error); }
   };
 
   const lanes = AREA_ORDER.map(area => ({ area, nodes: rows.filter(r => areaOf(r.station) === area) })).filter(l => l.nodes.length > 0);

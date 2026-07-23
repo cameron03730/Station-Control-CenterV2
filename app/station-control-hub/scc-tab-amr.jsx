@@ -8,6 +8,7 @@ const AMR_STATES = {
 };
 
 function BattBar({ pct }) {
+  if (pct == null) return <span className="text-[11px] text-scc-muted">Battery unavailable</span>;
   const color = pct > 50 ? '#2F9E44' : pct > 20 ? '#E8920C' : '#E03131';
   return (
     <div className="flex items-center gap-2">
@@ -29,7 +30,7 @@ function SlotChip({ label, value }) {
 }
 
 function AmrCard({ row, selected, onSelect, onSend }) {
-  const st = AMR_STATES[row.state];
+  const st = AMR_STATES[row.state] || { color: '#5B6675', label: row.state || 'Unknown' };
   const canSend = !!(row.c1 || row.c2) && row.state !== 'Offline';
   return (
     <div onClick={onSelect}
@@ -76,7 +77,8 @@ function AmrCompEditor({ label, current, reason, onCommit, onUnassign }) {
 }
 
 function TabAmr() {
-  const [amrs, setAmrs] = useState(seedAmrs);
+  const [amrs, setAmrs] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [q, setQ] = useState('');
   const [selId, setSelId] = useState(null);
   const [reason, setReason] = useState('');
@@ -85,7 +87,23 @@ function TabAmr() {
   const filtered = amrs.filter(a => a.amr.includes(q) || a.c1.includes(q) || a.c2.includes(q));
   const sel = amrs.find(a => a.amr === selId);
   const counts = ['Auto', 'StandBy', 'Offline'].map(s => ({ s, n: amrs.filter(a => a.state === s).length }));
-  const refresh = () => { setAmrs(seedAmrs()); window.sccToast('AMR fleet refreshed.', 'info'); };
+  const loadAmrs = async () => {
+    setLoading(true);
+    try {
+      const rows = await sccApi.read('getAmrFleet');
+      setAmrs((rows || []).map(row => ({
+        ...row,
+        amr: String(row.amr || row.AMR || '').padStart(3, '0'),
+        c1: row.c1 ?? row.ComponentID ?? '',
+        c2: row.c2 ?? row.ComponentID2 ?? '',
+        state: row.state || 'Unknown',
+        batt: row.batt ?? null
+      })));
+    } catch (error) { showApiError(error); }
+    finally { setLoading(false); }
+  };
+  useEffect(() => { loadAmrs(); }, []);
+  const refresh = () => loadAmrs().then(() => window.sccToast('AMR fleet refreshed.', 'info'));
 
   useEffect(() => {
     const h = e => { if (e.key === 'Escape') setSelId(null); };
@@ -93,7 +111,7 @@ function TabAmr() {
     return () => window.removeEventListener('keydown', h);
   }, []);
 
-  const sendPayload = (a) => window.sccToast(<span>AMR <b className="font-mono">{a.amr}</b> payload sent (Navithor size profile + scanner).</span>, 'success');
+  const sendPayload = (a) => window.sccToast(<span>Payload refresh is performed by the AMR component update action for <b className="font-mono">{a.amr}</b>.</span>, 'info');
 
   const askCommit = (field, label, newVal, clearInput) => {
     const cur = sel[field] || '(blank)';
@@ -101,10 +119,15 @@ function TabAmr() {
     setConfirm({
       title: `Commit AMR ${sel.amr} ${label}?`,
       body: <span>Set AMR <b className="text-scc-text font-mono">{sel.amr}</b> {label} → <span className="font-mono text-scc-orangeDk font-semibold">{nxt}</span>. Committing re-sends the AMR payload (Navithor size profile + scanner).</span>,
-      run: () => {
-        setAmrs(list => list.map(a => a.amr === selId ? { ...a, [field]: newVal } : a));
-        window.sccToast(<span>AMR <b className="font-mono">{sel.amr}</b> {label}: <span className="font-mono">{cur}</span> → <span className="font-mono">{nxt}</span> · payload re-sent</span>, 'success');
-        clearInput?.(); setConfirm(null);
+      run: async () => {
+        try {
+          const leaf = field === 'c2' ? 'componentID2' : 'componentID';
+          const result = await sccApi.commit('setAmrComponentId', { amrId: sel.amr, newId: newVal, reason, leaf });
+          if (result?.ok === false) throw new Error(result.message);
+          await loadAmrs();
+          window.sccToast(result?.message || <span>AMR <b className="font-mono">{sel.amr}</b> updated.</span>, 'success');
+          clearInput?.(); setConfirm(null);
+        } catch (error) { showApiError(error); }
       }
     });
   };
@@ -132,11 +155,11 @@ function TabAmr() {
       </Card>
 
       {/* Full-width grid */}
-      <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))' }}>
+      {loading ? <Card><EmptyState icon="progress_activity" title="Loading AMR fleet…" /></Card> : <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))' }}>
         {filtered.length === 0 && <Card><EmptyState icon="search_off" title="No AMRs match" /></Card>}
         {filtered.map(a => <AmrCard key={a.amr} row={a} selected={a.amr === selId}
           onSelect={() => { setSelId(a.amr); setReason(''); }} onSend={() => sendPayload(a)} />)}
-      </div>
+      </div>}
 
       {/* Slide-in details panel */}
       {sel && (
@@ -148,8 +171,8 @@ function TabAmr() {
                   <span className="text-[11px] uppercase tracking-wide text-scc-muted font-bold">AMR</span>
                   <span className="font-mono text-[20px] font-bold text-scc-text leading-none">{sel.amr}</span>
                 </div>
-                <span className="inline-flex items-center gap-1.5 text-[11.5px] font-semibold" style={{ color: AMR_STATES[sel.state].color }}>
-                  <span className="w-2 h-2 rounded-full" style={{ background: AMR_STATES[sel.state].color }} />{AMR_STATES[sel.state].label}
+                <span className="inline-flex items-center gap-1.5 text-[11.5px] font-semibold" style={{ color: (AMR_STATES[sel.state] || { color: '#5B6675' }).color }}>
+                  <span className="w-2 h-2 rounded-full" style={{ background: (AMR_STATES[sel.state] || { color: '#5B6675' }).color }} />{(AMR_STATES[sel.state] || { label: sel.state || 'Unknown' }).label}
                 </span>
               </div>
               <button onClick={() => setSelId(null)} className="text-scc-muted hover:text-scc-text"><Icon name="close" style={{ fontSize: 22 }} /></button>

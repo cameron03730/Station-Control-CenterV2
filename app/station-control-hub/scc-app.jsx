@@ -5,7 +5,9 @@ const TABS = [
   { key: 'station', label: 'Station Rectification', icon: 'grid_view', Comp: window.TabStation },
   { key: 'amr', label: 'AMR Rectification', icon: 'hub', Comp: window.TabAmr },
   { key: 'assembly', label: 'Manual Assembly', icon: 'checklist', Comp: window.TabAssembly },
-  { key: 'recon', label: 'Work Order Reconciliation', icon: 'schema', Comp: window.TabRecon }
+  { key: 'schedule', label: 'Run Schedule Refresh', icon: 'sync', Comp: window.TabSchedule },
+  { key: 'recon', label: 'Work Order Reconciliation', icon: 'schema', Comp: window.TabRecon },
+  { key: 'overview', label: 'Machine Overview', icon: 'route', Comp: window.TabOverview }
 ];
 
 function App() {
@@ -27,23 +29,10 @@ function App() {
         <div className="flex items-stretch h-[52px] pl-4 pr-3">
           {/* Brand */}
           <div className="flex items-center gap-3 pr-4">
-            <span className="font-extrabold italic tracking-tight text-[22px] leading-none" style={{ color: '#D2202A' }}>JLG</span>
+            <img src="./image.png" alt="JLG, An Oshkosh Corporation Business" className="w-[112px] h-[48px] object-contain shrink-0" />
             <span className="w-px h-6 bg-scc-border" />
             <span className="text-[13px] font-semibold text-scc-text whitespace-nowrap">Station Control<span className="text-scc-muted font-normal"> · SCC</span></span>
           </div>
-          {/* Tabs */}
-          <nav className="flex items-stretch overflow-x-auto no-sb">
-            {TABS.map(t => {
-              const on = t.key === tab;
-              return (
-                <button key={t.key} onClick={() => setTab(t.key)}
-                  className={`relative inline-flex items-center gap-2 px-3.5 text-[13px] font-medium whitespace-nowrap transition-colors ${on ? 'text-scc-text' : 'text-scc-muted hover:text-scc-text'}`}>
-                  <Icon name={t.icon} style={{ fontSize: 18 }} />{t.label}
-                  {on && <span className="absolute left-2 right-2 bottom-0 h-[2.5px] rounded-t bg-scc-orange" />}
-                </button>
-              );
-            })}
-          </nav>
           <span className="flex-1" />
           {/* Controls */}
           <div className="flex items-center gap-2.5">
@@ -62,10 +51,33 @@ function App() {
         </div>
       </header>
 
-      {/* Working area */}
-      <main className="max-w-[1320px] mx-auto px-4 py-5">
-        <Active />
-      </main>
+      <div className="flex flex-col lg:flex-row lg:items-start">
+        {/* Workspace navigation */}
+        <aside className="w-full lg:w-[248px] lg:shrink-0 lg:sticky lg:top-[52px] lg:h-[calc(100vh-52px)] bg-scc-card border-b lg:border-b-0 lg:border-r border-scc-border">
+          <div className="px-4 pt-5 pb-3">
+            <div className="text-[10px] font-bold uppercase tracking-[0.14em] text-scc-muted">Workspaces</div>
+            <div className="text-[12px] text-scc-muted mt-1">Production control tools</div>
+          </div>
+          <nav className="flex lg:flex-col gap-1 px-3 pb-3 overflow-x-auto no-sb" aria-label="Workspaces">
+            {TABS.map(t => {
+              const on = t.key === tab;
+              return (
+                <button key={t.key} onClick={() => setTab(t.key)} aria-current={on ? 'page' : undefined}
+                  className={`relative inline-flex lg:flex w-auto lg:w-full shrink-0 items-center gap-3 rounded-lg px-3 h-10 text-left text-[13px] font-semibold whitespace-nowrap transition-colors ${on ? 'bg-scc-orange/10 text-scc-orangeDk dark:text-scc-orange' : 'text-scc-muted hover:bg-scc-bg hover:text-scc-text'}`}>
+                  <Icon name={t.icon} style={{ fontSize: 19 }} />
+                  <span>{t.label}</span>
+                  {on && <span className="absolute left-0 top-2 bottom-2 w-[3px] rounded-r bg-scc-orange" />}
+                </button>
+              );
+            })}
+          </nav>
+        </aside>
+
+        {/* Working area */}
+        <main className="min-w-0 flex-1 max-w-[1320px] mx-auto w-full px-4 py-5 lg:px-6">
+          <Active />
+        </main>
+      </div>
 
       <ToastHost />
       <HelpDrawer open={helpOpen} onClose={() => setHelpOpen(false)} />

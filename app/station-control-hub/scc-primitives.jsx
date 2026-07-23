@@ -165,7 +165,6 @@ function ToastHost() {
     window.sccToast = (msg, type = 'success') => {
       const id = Math.random().toString(36).slice(2);
       setToasts(t => [...t, { id, msg, type }]);
-      setTimeout(() => setToasts(t => t.filter(x => x.id !== id)), 4200);
     };
   }, []);
   const cfg = {

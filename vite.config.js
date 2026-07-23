@@ -7,11 +7,14 @@ const projectRoot = fileURLToPath(new URL('.', import.meta.url));
 const appRoot = resolve(projectRoot, 'app/station-control-hub');
 const runtimeScripts = [
   'scc-data.jsx',
+  'scc-api.jsx',
   'scc-primitives.jsx',
   'scc-tab-station.jsx',
   'scc-tab-amr.jsx',
   'scc-tab-assembly.jsx',
   'scc-tab-recon.jsx',
+  'scc-tab-schedule.jsx',
+  'scc-tab-overview.jsx',
   'scc-help.jsx',
   'scc-app.jsx',
 ];
@@ -20,12 +23,12 @@ export default defineConfig({
   root: appRoot,
   base: './',
   server: {
-    host: 'localhost',
+    host: '0.0.0.0',
     port: 5173,
     strictPort: true,
   },
   preview: {
-    host: 'localhost',
+    host: '0.0.0.0',
     port: 4173,
     strictPort: true,
   },

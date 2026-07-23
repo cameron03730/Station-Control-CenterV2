@@ -2,7 +2,7 @@
 const { useState, useEffect } = React;
 
 function StationRow({ row, selected, onClick }) {
-  const next = row.runSchedule.find(e => e.status !== 3);
+  const next = row.runSchedule?.find(e => e.status !== 3);
   return (
     <tr onClick={onClick}
       className={`cursor-pointer border-b border-scc-borderLt transition-colors ${selected ? 'bg-scc-orange/[0.08]' : 'hover:bg-scc-bg'}`}>
@@ -83,7 +83,8 @@ function CompEditor({ label, current, blocked, reason, onCommit, onBlank }) {
 }
 
 function TabStation() {
-  const [stations, setStations] = useState(seedStations);
+  const [stations, setStations] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [area, setArea] = useState('All Areas');
   const [q, setQ] = useState('');
   const [selId, setSelId] = useState(null);
@@ -98,16 +99,43 @@ function TabStation() {
   const sel = stations.find(s => s.station === selId);
   const blocked = sel?.status === 2;
   const nWip = stations.filter(s => s.status === 2).length;
-  const nextUp = sel?.runSchedule.find(e => e.status !== 3);
+  const nextUp = sel?.runSchedule?.find(e => e.status !== 3);
+
+  const loadStations = async () => {
+    setLoading(true);
+    try {
+      const rows = await sccApi.read('getStationRows');
+      setStations((rows || []).map(row => ({
+        ...row,
+        station: row.station || row.Station,
+        area: row.area || row.Area || areaOf(row.station || row.Station || ''),
+        c1: row.c1 ?? row.ComponentID ?? '',
+        c2: row.c2 ?? row.ComponentID_2 ?? '',
+        status: row.status ?? row.Status,
+        runSchedule: row.runSchedule || []
+      })));
+    } catch (error) {
+      showApiError(error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
     const h = e => { if (e.key === 'Escape') setSelId(null); };
     window.addEventListener('keydown', h);
     return () => window.removeEventListener('keydown', h);
+    loadStations();
   }, []);
 
-  const refresh = () => { setStations(seedStations()); window.sccToast('Station list refreshed from Ignition.', 'info'); };
-  const openStation = (id) => { setSelId(id); setReason(''); setOpenEntry(null); };
+  const refresh = () => loadStations().then(() => window.sccToast('Station list refreshed from Ignition.', 'info'));
+  const openStation = async (id) => {
+    setSelId(id); setReason(''); setOpenEntry(null);
+    try {
+      const mismatch = await sccApi.read('stationComponentMismatch', { station: id });
+      setStations(list => list.map(row => row.station === id ? { ...row, mismatch } : row));
+    } catch (error) { showApiError(error); }
+  };
 
   const commit = (field, label, newVal, clearInput, danger) => {
     const cur = sel[field] || '(blank)';
@@ -117,19 +145,28 @@ function TabStation() {
       title: danger ? `Clear ${label}?` : `Commit ${label}?`,
       confirmLabel: danger ? 'Set Blank' : 'Commit',
       body: <span>Set <b className="text-scc-text">{sel.station}</b> {label} from <span className="font-mono">{cur}</span> → <span className={`font-mono font-semibold ${danger ? 'text-scc-red' : 'text-scc-orangeDk'}`}>{nxt}</span>. This override will be recorded to the SupervisorOverrideLog.</span>,
-      run: () => {
-        setStations(list => list.map(s => s.station === selId ? { ...s, [field]: newVal } : s));
-        window.sccToast(<span><b>{sel.station}</b> {label}: <span className="font-mono">{cur}</span> → <span className="font-mono">{nxt}</span></span>, 'success');
-        clearInput?.(); setConfirm(null);
+      run: async () => {
+        try {
+          const leaf = field === 'c2' ? 'componentID_2' : 'componentID';
+          const result = await sccApi.commit('setStationComponentId', { station: sel.station, newId: newVal, reason, leaf });
+          if (result?.ok === false) throw new Error(result.message);
+          await loadStations();
+          window.sccToast(result?.message || <span><b>{sel.station}</b> {label} updated.</span>, 'success');
+          clearInput?.(); setConfirm(null);
+        } catch (error) { showApiError(error); }
       }
     });
   };
 
   const actEntry = (tag, kind) => {
-    const e = sel.runSchedule.find(x => x.tag === tag);
-    setStations(list => list.map(s => s.station === selId
-      ? { ...s, runSchedule: s.runSchedule.map(x => x.tag === tag ? { ...x, status: kind === 'complete' ? 3 : 2 } : x) } : s));
-    window.sccToast(<span><span className="font-mono">{e.comp} | {e.serial}</span> {kind === 'complete' ? 'marked COMPLETE' : 'marked WIP'} at <b className="font-mono">{sel.station}</b>.</span>, kind === 'complete' ? 'success' : 'info');
+    const e = sel.runSchedule?.find(x => x.tag === tag);
+    sccApi.commit(kind === 'complete' ? 'markScheduleComplete' : 'markScheduleWip', {
+      idText: e?.comp || e?.serial || '', item: e?.op || '', station: sel.station, reason
+    }).then(async result => {
+      if (result?.ok === false) throw new Error(result.message);
+      await loadStations();
+      window.sccToast(result?.message || 'Schedule updated.', kind === 'complete' ? 'success' : 'info');
+    }).catch(showApiError);
   };
 
   return (
@@ -150,6 +187,7 @@ function TabStation() {
           <Btn variant="secondary" icon="refresh" onClick={refresh}>Refresh</Btn>
         </div>
         <div className="max-h-[calc(100vh-240px)] min-h-[420px] overflow-auto">
+          {loading ? <EmptyState icon="progress_activity" title="Loading stations…" /> :
           {filtered.length === 0 ? <EmptyState icon="search_off" title="No stations match" sub="Adjust the area filter or search." /> : (
             <table className="w-full text-[13px] border-collapse">
               <thead className="sticky top-0 z-10">
